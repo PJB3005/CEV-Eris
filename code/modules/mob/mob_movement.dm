@@ -194,15 +194,6 @@
 
 	if(world.time < move_delay)	return
 
-	//This compensates for the inaccuracy of move ticks
-	//Whenever world.time overshoots the movedelay, due to it only ticking once per decisecond
-	//The overshoot value is subtracted from our next delay, farther down where move delay is set.
-	//This doesn't entirely remove the problem, but it keeps travel times accurate to within 0.1 seconds
-	//Over an infinite distance, and prevents the inaccuracy from compounding. Thus making it basically a non-issue
-	var/leftover = world.time - move_delay
-	if (leftover > 1)
-		leftover = 0
-
 	if(locate(/obj/effect/stop/, mob.loc))
 		for(var/obj/effect/stop/S in mob.loc)
 			if(S.victim == mob)
@@ -263,142 +254,136 @@
 		return O.relaymove(mob, direct)
 
 
-	if(isturf(mob.loc))
+	if(!isturf(mob.loc))
+		return
 
-		if((istype(mob.loc, /turf/space)) || (mob.lastarea.has_gravity == 0))
-			if(!mob.Process_Spacemove(0))
-				return 0
-
-
-		if(mob.restrained())//Why being pulled while cuffed prevents you from moving
-			for(var/mob/M in range(mob, 1))
-				if(M.pulling == mob)
-					if(!M.restrained() && M.stat == 0 && M.canmove && mob.Adjacent(M))
-						src << "\blue You're restrained! You can't move!"
-						return 0
-					else
-						M.stop_pulling()
-
-		if(mob.pinned.len)
-			src << "\blue You're pinned to a wall by [mob.pinned[1]]!"
+	if((istype(mob.loc, /turf/space)) || (mob.lastarea.has_gravity == 0))
+		if(!mob.Process_Spacemove(0))
 			return 0
 
-		move_delay = 0 //Here we do NOT add world.time yet. So that we can modify the delay with multipliers
-		//We will add world.time whenever it leaves this functiopn or reaches a certain point
+	if(mob.restrained())//Why being pulled while cuffed prevents you from moving
+		for(var/mob/M in range(mob, 1))
+			if(M.pulling == mob)
+				if(!M.restrained() && M.stat == 0 && M.canmove && mob.Adjacent(M))
+					src << "<span class='info'>You're restrained! You can't move!</spawn>"
+					return 0
+				else
+					M.stop_pulling()
 
-		switch(mob.m_intent)
-			if("run")
-				if(mob.drowsyness > 0)
-					move_delay += 6
-				move_delay += 1+config.run_speed
-			if("walk")
-				move_delay += 7+config.walk_speed
-		move_delay += mob.movement_delay()
+	if(mob.pinned.len)
+		src << "<span class='info'>You're pinned to a wall by [mob.pinned[1]]!</span>"
+		return 0
 
-		var/tickcomp = 0 //moved this out here so we can use it for vehicles
-		if(config.Tickcomp)
-			// move_delay -= 1.3 //~added to the tickcomp calculation below
-			tickcomp = ((1/(world.tick_lag))*1.3) - 1.3
-			move_delay = move_delay + tickcomp
+	/*
+	TODO
+	if(istype(mob.buckled, /obj/vehicle))
+		//manually set move_delay for vehicles so we don't inherit any mob movement penalties
+		//specific vehicle move delays are set in code\modules\vehicles\vehicle.dm
+		move_delay = world.time + tickcomp
+		//drunk driving
+		if(mob.confused)
+			direct = pick(cardinal)
 
-		if(istype(mob.buckled, /obj/vehicle))
-			//manually set move_delay for vehicles so we don't inherit any mob movement penalties
-			//specific vehicle move delays are set in code\modules\vehicles\vehicle.dm
-			move_delay = world.time + tickcomp
-			//drunk driving
+		move_delay += world.time - leftover
+		return mob.buckled.relaymove(mob,direct)
+
+	if(istype(mob.machine, /obj/machinery))
+		if(mob.machine.relaymove(mob,direct))
+			move_delay += world.time - leftover
+			return
+
+	if(mob.pulledby || mob.buckled) // Wheelchair driving!
+		if(istype(mob.loc, /turf/space))
+			move_delay += world.time - leftover
+			return // No wheelchair driving in space
+		if(istype(mob.pulledby, /obj/structure/bed/chair/wheelchair))
+			move_delay += world.time - leftover
+			return mob.pulledby.relaymove(mob, direct)
+		else if(istype(mob.buckled, /obj/structure/bed/chair/wheelchair))
+			if(ishuman(mob))
+				var/mob/living/carbon/human/driver = mob
+				var/obj/item/organ/external/l_hand = driver.get_organ(BP_L_ARM)
+				var/obj/item/organ/external/r_hand = driver.get_organ(BP_R_ARM)
+				if((!l_hand || l_hand.is_stump()) && (!r_hand || r_hand.is_stump()))
+					move_delay += world.time - leftover
+					return // No hands to drive your chair? Tough luck!
+			//drunk wheelchair driving
 			if(mob.confused)
 				direct = pick(cardinal)
-
+			move_delay += 2
 			move_delay += world.time - leftover
 			return mob.buckled.relaymove(mob,direct)
+	*/
+	/*
+	TODO
+	switch(mob.m_intent)
+		if("run")
+			if(mob.drowsyness > 0)
+				move_delay += 6
+			move_delay += 1+config.run_speed
+		if("walk")
+			move_delay += 7+config.walk_speed
+	*/
+	var/speed = mob.movement_speed()
 
-		if(istype(mob.machine, /obj/machinery))
-			if(mob.machine.relaymove(mob,direct))
-				move_delay += world.time - leftover
-				return
+	/*
+	//Here we apply speed factor only if the mob is moving under its own power
+	if (mob.speed_factor && mob.speed_factor != 1.0)
+		move_delay /= mob.speed_factor
+	*/
 
-		if(mob.pulledby || mob.buckled) // Wheelchair driving!
-			if(istype(mob.loc, /turf/space))
-				move_delay += world.time - leftover
-				return // No wheelchair driving in space
-			if(istype(mob.pulledby, /obj/structure/bed/chair/wheelchair))
-				move_delay += world.time - leftover
-				return mob.pulledby.relaymove(mob, direct)
-			else if(istype(mob.buckled, /obj/structure/bed/chair/wheelchair))
-				if(ishuman(mob))
-					var/mob/living/carbon/human/driver = mob
-					var/obj/item/organ/external/l_hand = driver.get_organ(BP_L_ARM)
-					var/obj/item/organ/external/r_hand = driver.get_organ(BP_R_ARM)
-					if((!l_hand || l_hand.is_stump()) && (!r_hand || r_hand.is_stump()))
-						move_delay += world.time - leftover
-						return // No hands to drive your chair? Tough luck!
-				//drunk wheelchair driving
-				if(mob.confused)
-					direct = pick(cardinal)
-				move_delay += 2
-				move_delay += world.time - leftover
-				return mob.buckled.relaymove(mob,direct)
+	var/delay = 10/speed
+	move_delay = world.time + delay
+	mob.glide_size = DELAY2GLIDESIZE(delay)
 
+	//We are now going to move
+	moving = 1
+	//Something with pulling things
+	if(locate(/obj/item/weapon/grab, mob))
+		move_delay = max(move_delay, world.time + 7)
+		var/list/L = mob.ret_grab()
+		if(istype(L, /list))
+			if(L.len == 2)
+				L -= mob
+				var/mob/M = L[1]
+				if(M)
+					if ((get_dist(mob, M) <= 1 || M.loc == mob.loc))
+						var/turf/T = mob.loc
+						. = ..()
+						if (isturf(M.loc))
+							var/diag = get_dir(mob, M)
+							if ((diag - 1) & diag)
+							else
+								diag = null
+							if ((get_dist(mob, M) > 1 || diag))
+								step(M, get_dir(M.loc, T))
+			else
+				for(var/mob/M in L)
+					M.other_mobs = 1
+					if(mob != M)
+						M.animate_movement = 3
+				for(var/mob/M in L)
+					spawn( 0 )
+						step(M, direct)
+						return
+					spawn( 1 )
+						M.other_mobs = null
+						M.animate_movement = 2
+						return
 
-		//Here we apply speed factor only if the mob is moving under its own power
-		if (mob.speed_factor && mob.speed_factor != 1.0)
-			move_delay /= mob.speed_factor
+	else if(mob.confused)
+		step(mob, pick(cardinal))
+	else
+		. = mob.SelfMove(n, direct)
 
-		//Latest possible point to factor in world.time
-		move_delay += world.time - leftover
+	for (var/obj/item/weapon/grab/G in mob)
+		if (G.state == GRAB_NECK)
+			mob.set_dir(reverse_dir[direct])
+		G.adjust_position()
+	for (var/obj/item/weapon/grab/G in mob.grabbed_by)
+		G.adjust_position()
 
-		//We are now going to move
-		moving = 1
-		//Something with pulling things
-		if(locate(/obj/item/weapon/grab, mob))
-			move_delay = max(move_delay, world.time + 7)
-			var/list/L = mob.ret_grab()
-			if(istype(L, /list))
-				if(L.len == 2)
-					L -= mob
-					var/mob/M = L[1]
-					if(M)
-						if ((get_dist(mob, M) <= 1 || M.loc == mob.loc))
-							var/turf/T = mob.loc
-							. = ..()
-							if (isturf(M.loc))
-								var/diag = get_dir(mob, M)
-								if ((diag - 1) & diag)
-								else
-									diag = null
-								if ((get_dist(mob, M) > 1 || diag))
-									step(M, get_dir(M.loc, T))
-				else
-					for(var/mob/M in L)
-						M.other_mobs = 1
-						if(mob != M)
-							M.animate_movement = 3
-					for(var/mob/M in L)
-						spawn( 0 )
-							step(M, direct)
-							return
-						spawn( 1 )
-							M.other_mobs = null
-							M.animate_movement = 2
-							return
-
-		else if(mob.confused)
-			step(mob, pick(cardinal))
-		else
-			. = mob.SelfMove(n, direct)
-
-		for (var/obj/item/weapon/grab/G in mob)
-			if (G.state == GRAB_NECK)
-				mob.set_dir(reverse_dir[direct])
-			G.adjust_position()
-		for (var/obj/item/weapon/grab/G in mob.grabbed_by)
-			G.adjust_position()
-
-		moving = 0
-
-		return .
-
-	return
+	moving = 0
 
 /mob/proc/SelfMove(turf/n, direct)
 	return Move(n, direct)

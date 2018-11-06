@@ -1,7 +1,7 @@
 /mob/living/carbon/human/movement_delay()
 
 	var/tally = 0
-
+/*
 	if(species.slowdown)
 		tally = species.slowdown
 
@@ -55,9 +55,17 @@
 
 	tally += max(2 * stance_damage, 0) //damaged/missing feet or legs is slow
 
+	switch(m_intent)
+		if("run")
+			if (drowsyness > 0)
+				move_delay += 6
+			tally += 1+config.run_speed
+		if("walk")
+			tally += 7+config.walk_speed
+
 	if(mRun in mutations)
 		tally = 0
-
+*/
 	return (tally+config.human_delay)
 
 /mob/living/carbon/human/Process_Spacemove(var/check_drift = 0)

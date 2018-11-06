@@ -164,6 +164,11 @@
 /mob/proc/movement_delay()
 	return 0
 
+/mob/proc/movement_speed()
+	return movspeedtemp
+
+/mob/var/movspeedtemp = MOVEMENT_SPEED_BASE
+
 /mob/proc/Life()
 //	if(organStructure)
 //		organStructure.ProcessOrgans()
