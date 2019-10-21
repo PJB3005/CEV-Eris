@@ -4,6 +4,7 @@ var NanoTemplate = function () {
     var _templateData = {};
 
     var _templates = {};
+    var _preloadedTemplates = {};
     var _compiledTemplates = {};
 	
 	var _helpers = {};
@@ -38,31 +39,46 @@ var NanoTemplate = function () {
                 continue;
             }
 
+            var doneFunc = function(templateMarkup) {
+
+                templateMarkup += '<div class="clearBoth"></div>';
+
+                try
+                {
+                    NanoTemplate.addTemplate(key, templateMarkup);
+                }
+                catch(error)
+                {
+                    alert('ERROR: An error occurred while loading the UI: ' + error.message);
+                    return;
+                }
+
+                delete _templateData[key];
+
+                loadNextTemplate();
+            };
+
+            var templateUrl = _templateData[key];
+            if (_preloadedTemplates.hasOwnProperty(templateUrl))
+            {
+                // Handled preloaded templates.
+                // These templates are loaded via .js file before this code runs.
+                // So they do not have to be dynamically fetched.
+                // *Hopefully* this will work around the BYOND bug where certain interfaces don't load.
+                // Hopefully.
+                alert("Loaded from preload! " + templateUrl);
+                doneFunc(_preloadedTemplates[templateUrl]);
+                return;
+            }
+
             $.when($.ajax({
-                    url: _templateData[key],
+                    url: templateUrl,
                     // Disabling caching using jQuery's hack seems to break Nano in some obscure cases on BYOND 512.
                     // Oh well.
                     //cache: false,
                     dataType: 'text'
                 }))
-                .done(function(templateMarkup) {
-
-                    templateMarkup += '<div class="clearBoth"></div>';
-
-                    try
-                    {
-                        NanoTemplate.addTemplate(key, templateMarkup);
-                    }
-                    catch(error)
-                    {
-                        alert('ERROR: An error occurred while loading the UI: ' + error.message);
-                        return;
-                    }
-
-                    delete _templateData[key];
-
-                    loadNextTemplate();
-                })
+                .done(doneFunc)
                 .fail(function () {
                     alert('ERROR: Loading template ' + key + '(' + _templateData[key] + ') failed!');
                 });
@@ -86,6 +102,9 @@ var NanoTemplate = function () {
     return {
         init: function () {
             init();
+        },
+        preloadTemplate: function (tmplName, templateString) {
+            _preloadedTemplates[tmplName] = templateString;
         },
         addTemplate: function (key, templateString) {
             _templates[key] = templateString;

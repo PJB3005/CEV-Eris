@@ -379,6 +379,11 @@ nanoui is used to open and update nano browser uis
 	if (templates.len > 0)
 		template_data_json = strip_improper(json_encode(templates))
 
+	// Pre-load templates.
+	for (var/key in templates)
+		var/tmpName = templates[key]
+		head_content += "<script type='text/javascript' src='[tmpName].js'></script> "
+
 	var/list/send_data = get_send_data(initial_data)
 
 	var/initial_data_json = replacetext(replacetext(json_encode(send_data), "&#34;", "&amp;#34;"), "'", "&#39;")
